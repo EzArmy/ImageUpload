@@ -1,121 +1,165 @@
-import { View, Text, TouchableOpacity, SafeAreaView, Alert, Image, StyleSheet, ScrollView, Dimensions, StatusBar } from 'react-native';
+// Importações dos componentes e módulos necessários
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  Image,
+  StyleSheet,
+  ScrollView,
+  Dimensions,
+  StatusBar,
+  TouchableWithoutFeedback,
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { firebase } from '../firebaseConfig';
-import React, { useState, useEffect } from 'react';
-import * as FileSystem from 'expo-file-system';
 import { getStorageImages } from '../firebaseConfig';
 
+// Obtenção da largura da tela e cálculo do número de imagens por linha
 const { width } = Dimensions.get('window');
-const IMAGE_WIDTH = 75; // Largura de cada imagem
-const IMAGES_PER_ROW = Math.floor(width / IMAGE_WIDTH); // Número de imagens por linha
+const IMAGE_WIDTH = 250;
+const IMAGES_PER_ROW = Math.floor(width / IMAGE_WIDTH);
 
+// Obtenção da altura da barra de status (se existir)
 const statusBarHeight = StatusBar.currentHeight || 0;
 
+// Componente principal responsável pelo upload e exibição de imagens
 export const UploadMediaFile = () => {
-    const [images, setImages] = useState([]);
-    const [uploading, setUploading] = useState(false);
+  // Estados locais para armazenar imagens, status de upload e visibilidade do nome da imagem
+  const [images, setImages] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [showImageName, setShowImageName] = useState({});
 
-    useEffect(() => {
-        // Carrega as imagens do Firebase Storage ao montar o componente
-        fetchStorageImages();
-    }, []);
+  // Efeito de componente que carrega imagens do Firebase Storage ao montar o componente
+  useEffect(() => {
+    fetchStorageImages();
+  }, []);
 
-    const fetchStorageImages = async () => {
-        try {
-            const storageImages = await getStorageImages();
-            setImages(storageImages);
-        } catch (error) {
-            // Trata o erro
-            console.error('Error fetching storage images:', error);
-        }
-    };
+  // Função assíncrona para buscar imagens no Firebase Storage
+  const fetchStorageImages = async () => {
+    try {
+      // Obtém URLs de imagens
+      const storageImages = await getStorageImages();
+      // Define as imagens e inicializa o estado showImageName como não visíveis
+      setImages(storageImages);
+      setShowImageName(Object.fromEntries(storageImages.map(image => [image, false])));
+    } catch (error) {
+      // Trata o erro
+      console.error('Error fetching storage images:', error);
+    }
+  };
 
-    const pickImage = async () => {
-        // Seleciona uma imagem da galeria
-        let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.All,
-            allowsEditing: true,
-            aspect: [4, 3],
-            quality: 1,
-        });
+  // Função para selecionar uma imagem da galeria
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
 
-        if (!result.canceled) {
-            // Adiciona a URI da imagem ao estado
-            setImages([...images, result.assets[0].uri]);
-        }
-    };
+    if (!result.canceled) {
+      // Adiciona a URI da imagem ao estado e inicializa o estado showImageName como não visível
+      setImages([...images, result.assets[0].uri]);
+      setShowImageName({ ...showImageName, [result.assets[0].uri]: false });
+    }
+  };
 
-    // Função para dividir as imagens em linhas
-    const chunkArray = (array, chunkSize) => {
-        return Array.from({ length: Math.ceil(array.length / chunkSize) }, (_, index) =>
-            array.slice(index * chunkSize, (index + 1) * chunkSize)
-        );
-    };
+  // Função para obter o nome do arquivo de uma URL
+  const getFileName = (url) => {
+    const pathParts = url.split('/');
+    return pathParts[pathParts.length - 1];
+  };
 
-    // Divide as imagens em linhas
-    const imagesInRows = chunkArray(images, IMAGES_PER_ROW);
+  // Função para alternar a visibilidade do nome da imagem
+  const toggleImageName = (imageUri) => {
+    setShowImageName({ ...showImageName, [imageUri]: !showImageName[imageUri] });
+  };
 
-    return (
-        <SafeAreaView style={styles.container}>
-            <ScrollView horizontal={false} style={styles.scrollView}>
-                {/* Renderiza as imagens do Firebase Storage em linhas */}
-                {imagesInRows.map((row, rowIndex) => (
-                    <View key={rowIndex} style={styles.rowContainer}>
-                        {row.map((item, index) => (
-                            <View key={index} style={styles.imageContainer}>
-                                <Image
-                                    source={{ uri: item }}
-                                    style={{ width: IMAGE_WIDTH, height: IMAGE_WIDTH, margin: 5 }}
-                                />
-                            </View>
-                        ))}
-                    </View>
-                ))}
-            </ScrollView>
-            {/* Adicione um botão para iniciar o processo de upload (se necessário) */}
-            <TouchableOpacity style={styles.Btn} onPress={pickImage}>
-                <Text style={styles.BtnTxt}>Select</Text>
-            </TouchableOpacity>
-        </SafeAreaView>
+  // Função para dividir as imagens em linhas
+  const chunkArray = (array, chunkSize) => {
+    return Array.from({ length: Math.ceil(array.length / chunkSize) }, (_, index) =>
+      array.slice(index * chunkSize, (index + 1) * chunkSize)
     );
+  };
+
+  // Divide as imagens em linhas
+  const imagesInRows = chunkArray(images, IMAGES_PER_ROW);
+
+  // Renderização do componente
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView horizontal={false} style={styles.scrollView}>
+        {imagesInRows.map((row, rowIndex) => (
+          <View key={rowIndex} style={styles.rowContainer}>
+            {row.map((item, index) => (
+              <TouchableWithoutFeedback
+                key={index}
+                onPress={() => toggleImageName(item)}
+              >
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: item }}
+                    style={{ width: IMAGE_WIDTH, height: IMAGE_WIDTH, margin: 5 }}
+                  />
+                  {showImageName[item] && (
+                    <Text style={styles.imageName}>{getFileName(item)}</Text>
+                  )}
+                </View>
+              </TouchableWithoutFeedback>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+      <TouchableOpacity style={styles.Btn} onPress={pickImage}>
+        <Text style={styles.BtnTxt}>Select</Text>
+      </TouchableOpacity>
+    </SafeAreaView>
+  );
 };
 
-// Estilos
+// Estilos do componente
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#fff',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: statusBarHeight,
-    },
-    Btn: {
-        marginBottom: 10,
-        marginTop: 10,
-        backgroundColor: '#000',
-        width: 125,
-        height: 45,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    BtnTxt: {
-        color: '#fff',
-        fontSize: 17,
-        fontWeight: '600',
-    },
-    scrollView: {
-        flex: 1,
-        flexDirection: 'column', // Alterado para 'column'
-        width: width, // Ajuste para a largura da tela menos margens
-        marginHorizontal: 0, // Adicionado margens
-    },
-    rowContainer: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-    },
-    imageContainer: {
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: statusBarHeight,
+  },
+  Btn: {
+    marginBottom: 10,
+    marginTop: 10,
+    backgroundColor: '#000',
+    width: 125,
+    height: 45,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  BtnTxt: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  scrollView: {
+    flex: 1,
+    flexDirection: 'column',
+    width: width,
+    marginHorizontal: 0,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+  },
+  imageContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageName: {
+    fontSize: 14,
+    marginTop: 5,
+    textAlign: 'center',
+  },
 });

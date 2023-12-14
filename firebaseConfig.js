@@ -3,7 +3,12 @@ import firebase from 'firebase/compat/app';
 import 'firebase/compat/storage';
 
 const firebaseConfig = {
-  /* Suas configurações do firebase */
+  apiKey: "AIzaSyDHze7QFr0sG6GByNWYEWdGZrpF9WKr2nw",
+  authDomain: "imageupload-91c1f.firebaseapp.com",
+  projectId: "imageupload-91c1f",
+  storageBucket: "imageupload-91c1f.appspot.com",
+  messagingSenderId: "1049901624854",
+  appId: "1:1049901624854:web:d0915bfe3738b803b84f37"
 }
 
 // Inicializa o Firebase se ainda não estiver inicializado
