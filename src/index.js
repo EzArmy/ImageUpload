@@ -11,10 +11,10 @@ import {
   Dimensions,
   StatusBar,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { firebase } from '../firebaseConfig';
-import { getStorageImages } from '../firebaseConfig';
+import { firebase, getStorageImages, firebaseConfig } from './firebase/firebaseConfig';
 
 // Obtenção da largura da tela e cálculo do número de imagens por linha
 const { width } = Dimensions.get('window');
@@ -28,7 +28,7 @@ const statusBarHeight = StatusBar.currentHeight || 0;
 export const UploadMediaFile = () => {
   // Estados locais para armazenar imagens, status de upload e visibilidade do nome da imagem
   const [images, setImages] = useState([]);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(true); // Inicia como true para mostrar a animação
   const [showImageName, setShowImageName] = useState({});
 
   // Efeito de componente que carrega imagens do Firebase Storage ao montar o componente
@@ -47,22 +47,55 @@ export const UploadMediaFile = () => {
     } catch (error) {
       // Trata o erro
       console.error('Error fetching storage images:', error);
+    } finally {
+      // Quando as imagens são carregadas ou ocorre um erro, definimos uploading como false
+      setUploading(false);
     }
   };
 
-  // Função para selecionar uma imagem da galeria
+  // Função para selecionar uma imagem da galeria e fazer o upload para o Firebase Storage
   const pickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 1,
-    });
+    try {
+      let result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.All,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
 
-    if (!result.canceled) {
-      // Adiciona a URI da imagem ao estado e inicializa o estado showImageName como não visível
-      setImages([...images, result.assets[0].uri]);
-      setShowImageName({ ...showImageName, [result.assets[0].uri]: false });
+      if (!result.canceled) {
+        // Adiciona a URI da imagem ao estado e inicializa o estado showImageName como não visível
+        setImages([...images, result.assets[0].uri]);
+        setShowImageName({ ...showImageName, [result.assets[0].uri]: false });
+
+        // Faz o upload da imagem para o Firebase Storage
+        await uploadImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error picking and uploading image:', error);
+    }
+  };
+
+  // Função para fazer o upload da imagem para o Firebase Storage
+  const uploadImage = async (uri) => {
+    try {
+      setUploading(true);
+
+      const response = await fetch(uri);
+      const blob = await response.blob();
+
+      const storageRef = firebase.storage().ref();
+      const imageName = getFileName(uri);
+      const imageRef = storageRef.child(`images/${imageName}`);
+
+      await imageRef.put(blob);
+
+      // Atualiza o estado ou realiza outras ações após o upload ser concluído
+      console.log('Image uploaded successfully');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -90,28 +123,34 @@ export const UploadMediaFile = () => {
   // Renderização do componente
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView horizontal={false} style={styles.scrollView}>
-        {imagesInRows.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.rowContainer}>
-            {row.map((item, index) => (
-              <TouchableWithoutFeedback
-                key={index}
-                onPress={() => toggleImageName(item)}
-              >
-                <View style={styles.imageContainer}>
-                  <Image
-                    source={{ uri: item }}
-                    style={{ width: IMAGE_WIDTH, height: IMAGE_WIDTH, margin: 5 }}
-                  />
-                  {showImageName[item] && (
-                    <Text style={styles.imageName}>{getFileName(item)}</Text>
-                  )}
-                </View>
-              </TouchableWithoutFeedback>
-            ))}
-          </View>
-        ))}
-      </ScrollView>
+      {uploading && (
+        // Mostra a animação enquanto o aplicativo está carregando as imagens
+        <ActivityIndicator size="large" color="#000" style={styles.loadingIndicator} />
+      )}
+      {!uploading && (
+        <ScrollView horizontal={false} style={styles.scrollView}>
+          {imagesInRows.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.rowContainer}>
+              {row.map((item, index) => (
+                <TouchableWithoutFeedback
+                  key={index}
+                  onPress={() => toggleImageName(item)}
+                >
+                  <View style={styles.imageContainer}>
+                    <Image
+                      source={{ uri: item }}
+                      style={{ width: IMAGE_WIDTH, height: IMAGE_WIDTH, margin: 5 }}
+                    />
+                    {showImageName[item] && (
+                      <Text style={styles.imageName}>{getFileName(item)}</Text>
+                    )}
+                  </View>
+                </TouchableWithoutFeedback>
+              ))}
+            </View>
+          ))}
+        </ScrollView>
+      )}
       <TouchableOpacity style={styles.Btn} onPress={pickImage}>
         <Text style={styles.BtnTxt}>Select</Text>
       </TouchableOpacity>
@@ -161,5 +200,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
     textAlign: 'center',
+  },
+  loadingIndicator: {
+    marginTop: 20,
   },
 });
