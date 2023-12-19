@@ -6,6 +6,7 @@ import { UploadMediaFile } from './src/index';
 
 export default function App() {
   return (
+    // Renderiza o componente UploadMediaFile ao iniciar o aplicativo
     <UploadMediaFile/>
   );
 }

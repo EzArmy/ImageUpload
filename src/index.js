@@ -11,6 +11,7 @@ import {
   Dimensions,
   StatusBar,
   TouchableWithoutFeedback,
+  Modal,
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -30,6 +31,8 @@ export const UploadMediaFile = () => {
   const [images, setImages] = useState([]);
   const [uploading, setUploading] = useState(true); // Inicia como true para mostrar a animação
   const [showImageName, setShowImageName] = useState({});
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [uploadModalVisible, setUploadModalVisible] = useState(false);
 
   // Efeito de componente que carrega imagens do Firebase Storage ao montar o componente
   useEffect(() => {
@@ -53,54 +56,30 @@ export const UploadMediaFile = () => {
     }
   };
 
-  // Função para selecionar uma imagem da galeria e fazer o upload para o Firebase Storage
+  // Função para selecionar uma imagem da galeria
   const pickImage = async () => {
-    try {
-      let result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.All,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 1,
-      });
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
 
-      if (!result.canceled) {
-        // Adiciona a URI da imagem ao estado e inicializa o estado showImageName como não visível
-        setImages([...images, result.assets[0].uri]);
-        setShowImageName({ ...showImageName, [result.assets[0].uri]: false });
-
-        // Faz o upload da imagem para o Firebase Storage
-        await uploadImage(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error('Error picking and uploading image:', error);
-    }
-  };
-
-  // Função para fazer o upload da imagem para o Firebase Storage
-  const uploadImage = async (uri) => {
-    try {
-      setUploading(true);
-
-      const response = await fetch(uri);
-      const blob = await response.blob();
-
-      const storageRef = firebase.storage().ref();
-      const imageName = getFileName(uri);
-      const imageRef = storageRef.child(`images/${imageName}`);
-
-      await imageRef.put(blob);
-
-      // Atualiza o estado ou realiza outras ações após o upload ser concluído
-      console.log('Image uploaded successfully');
-    } catch (error) {
-      console.error('Error uploading image:', error);
-    } finally {
-      setUploading(false);
+    if (!result.canceled) {
+      // Adiciona a URI da imagem ao estado e inicializa o estado showImageName como não visível
+      setSelectedImage(result.assets[0].uri);
+      setShowImageName({ ...showImageName, [result.assets[0].uri]: false });
+      // Abre o modal de upload
+      setUploadModalVisible(true);
     }
   };
 
   // Função para obter o nome do arquivo de uma URL
   const getFileName = (url) => {
+    if (!url) {
+      return 'Unknown'; // Ou qualquer valor padrão que você queira retornar
+    }
+
     const pathParts = url.split('/');
     return pathParts[pathParts.length - 1];
   };
@@ -108,6 +87,45 @@ export const UploadMediaFile = () => {
   // Função para alternar a visibilidade do nome da imagem
   const toggleImageName = (imageUri) => {
     setShowImageName({ ...showImageName, [imageUri]: !showImageName[imageUri] });
+  };
+
+  // Função para cancelar o upload e fechar o modal
+  const cancelUpload = () => {
+    // Limpa o estado da imagem selecionada
+    setSelectedImage(null);
+    // Fecha o modal de upload
+    setUploadModalVisible(false);
+  };
+
+  // Função para realizar o upload da imagem
+  const handleUpload = async () => {
+    try {
+      setUploading(true);
+
+      if (!selectedImage) {
+        console.error('No image selected for upload');
+        return;
+      }
+
+      const response = await fetch(selectedImage);
+      const blob = await response.blob();
+
+      const storageRef = firebase.storage().ref();
+      const imageName = getFileName(selectedImage);
+      const imageRef = storageRef.child(`images/${imageName}`);
+
+      await imageRef.put(blob);
+
+      // Atualize o estado ou realize outras ações após o upload ser concluído
+      console.log('Image uploaded successfully');
+    } catch (error) {
+      console.error('Error uploading image:', error);
+    } finally {
+      // Quando o upload é concluído ou ocorre um erro, definimos uploading como false
+      setUploading(false);
+      // Fecha o modal de upload
+      setUploadModalVisible(false);
+    }
   };
 
   // Função para dividir as imagens em linhas
@@ -151,6 +169,28 @@ export const UploadMediaFile = () => {
           ))}
         </ScrollView>
       )}
+
+      {/* Modal de upload */}
+      <Modal
+        visible={uploadModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setUploadModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.uploadModal}>
+            <Image
+              source={{ uri: selectedImage }}
+              style={{ width: 200, height: 200, marginBottom: 10 }}
+            />
+            <Text style={styles.uploadText}>Upload...</Text>
+            <TouchableOpacity style={styles.cancelButton} onPress={cancelUpload}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <TouchableOpacity style={styles.Btn} onPress={pickImage}>
         <Text style={styles.BtnTxt}>Select</Text>
       </TouchableOpacity>
@@ -203,5 +243,34 @@ const styles = StyleSheet.create({
   },
   loadingIndicator: {
     marginTop: 20,
+  },
+  // Estilos do modal
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  uploadModal: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  uploadText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  cancelButton: {
+    backgroundColor: '#ff3333',
+    padding: 10,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
